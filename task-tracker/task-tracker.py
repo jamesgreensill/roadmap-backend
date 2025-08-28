@@ -14,25 +14,36 @@ class JsonDataContext:
         self.filepath = filepath
         pass
 
-    def load(self):
+    def load(self, cls):
         if not os.path.exists(self.filepath):
-            self.save([])
-            return []
+            # Handle dictionaries, lists & symbols
+            default = [] if cls is list else {} if cls is dict else cls()
+            self.save(default)
+            return default
 
         with open(self.filepath) as file:
             data = json.load(file)
+            if not isinstance(data, cls):
+                raise TypeError(data)
             return data
 
         return None
 
     def save(self, data):
-        serializable = [
-            item.to_dict() if hasattr(item, "to_dict") else item
-            for item in data
-        ]
-        with open(self.filepath, "w") as f:
-            json.dump(serializable, f, indent=4)
+        with open(self.filepath, "w") as file:
+            json_data = json.dumps(
+                data, default=lambda object: object.__dict__, indent=4)
+            file.write(json_data)
         pass
+
+    def parse_list(data, cls):
+        items = []
+        for item in data:
+            try:
+                items.append(cls(**item))
+            except TypeError as exception:
+                raise ValueError(f'Malformed data: {item}') from exception
+        return items
 
 
 class Task:
@@ -41,61 +52,82 @@ class Task:
         IN_PROGRESS = 2
         DONE = 3
 
-    def __init__(self, id, description, status, created_at, updated_at):
+    def __init__(self, id, name, status, created_at, updated_at):
         self.id = id
-        self.description = description
+        self.name = name
         self.status = status
         self.created_at = created_at
         self.updated_at = updated_at
         pass
 
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'description': self.description,
-            'status': self.status,
-            'createdAt': self.created_at,
-            'updatedat': self.updated_at,
-        }
-
     def __str__(self):
-        return f'id: {self.id}\ndescription: {self.description}\nstatus: {self.status}\ncreated_at: {self.created_at}\nupdated_at: {self.updated_at}'
+        return f'id: {self.id}\nname: {self.name}\nstatus: {self.status}\ncreated_at: {self.created_at}\nupdated_at: {self.updated_at}'
         pass
 
-    @staticmethod
-    # Create a new task and saves to file.
-    def add(arguments, task_context: JsonDataContext):
-        name = arguments.name
-        if name is None:
-            return "List: Name is has not been set"
+    def get_index_by_id(tasks, task_id):
+        return next((i for i, task in enumerate(tasks)
+                     if int(task.id) == int(task_id)), None)
 
-        tasks = task_context.load()
+    def get_by_id(tasks, id):
+        index = Task.get_index_by_id(tasks, id)
+        if index is None:
+            return None
+        return tasks[index]
+
+    @staticmethod
+    def add(arguments, task_context: JsonDataContext):
+        assert arguments.name is not None
+
+        json_data = task_context.load(list)
+        tasks = JsonDataContext.parse_list(json_data, Task)
 
         # Auto increment
         task = Task(
             id=(len(tasks) + 1),
-            description=name,
+            name=arguments.name,
             status=Task.Status.TODO.value,
             created_at=time.time(),
             updated_at=time.time(),
         )
 
         tasks.append(task)
-
         task_context.save(tasks)
         return task
 
     @staticmethod
     # Updates an existing task and saves to file.
     def update(arguments, task_context: JsonDataContext):
-        return "update"
-        pass
+        assert arguments.id is not None
+        assert arguments.name is not None
+
+        json_data = task_context.load(list)
+        tasks = JsonDataContext.parse_list(json_data, Task)
+
+        index = Task.get_index_by_id(tasks, arguments.id)
+        task = tasks[index]
+
+        task.name = arguments.name
+
+        tasks[index] = task
+
+        task_context.save(tasks)
+        return task
 
     @staticmethod
     # Deletes an existing task
     def delete(arguments, task_context: JsonDataContext):
-        return "delete"
-        pass
+        assert arguments.id is not None
+
+        json_data = task_context.load(list)
+        tasks = JsonDataContext.parse_list(json_data, Task)
+
+        index = Task.get_index_by_id(tasks, arguments.id)
+        task = tasks[index]
+
+        tasks.pop(index)
+
+        task_context.save(tasks)
+        return task
 
     @staticmethod
     # Sets the status of an existing task
