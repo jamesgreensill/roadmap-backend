@@ -55,7 +55,7 @@ class Task:
 
         def __new__(cls, value, aliases):
             obj = object.__new__(cls)
-            obj.value = value
+            obj._value_ = value
             obj.aliases = aliases
             return obj
 
@@ -96,9 +96,17 @@ class Task:
         json_data = task_context.load(list)
         tasks = JsonDataContext.parse_list(json_data, Task)
 
-        # Auto increment
+        # Auto increment, this prevents referenced ids from being overritten if deleted.
+        # For example, if task w/ id:1 existed and was deleted, there will never be another task w/ id:1, this ensures
+        # Any references to task id:1 can error accordingly, and is not silent.
+        top_id = 0
+        for task in tasks:
+            task_id = int(task.id)
+            if task_id > top_id:
+                top_id = task_id
+
         task = Task(
-            id=(len(tasks) + 1),
+            id=top_id+1,
             name=arguments.name,
             status=Task.Status.TODO.value,
             created_at=time.time(),
@@ -107,7 +115,7 @@ class Task:
 
         tasks.append(task)
         task_context.save(tasks)
-        return task
+        return True
 
     @staticmethod
     # Updates an existing task and saves to file.
@@ -119,6 +127,8 @@ class Task:
         tasks = JsonDataContext.parse_list(json_data, Task)
 
         index = Task.get_index_by_id(tasks, arguments.id)
+        assert index is not None
+
         task = tasks[index]
 
         task.name = arguments.name
@@ -127,7 +137,7 @@ class Task:
         tasks[index] = task
 
         task_context.save(tasks)
-        return task
+        return True
 
     @staticmethod
     # Deletes an existing task
@@ -138,12 +148,12 @@ class Task:
         tasks = JsonDataContext.parse_list(json_data, Task)
 
         index = Task.get_index_by_id(tasks, arguments.id)
-        task = tasks[index]
+        assert index is not None
 
         tasks.pop(index)
 
         task_context.save(tasks)
-        return task
+        return True
 
     @staticmethod
     # Sets the status of an existing task
@@ -151,8 +161,22 @@ class Task:
         assert arguments.id is not None
         assert arguments.status is not None
 
-        return "status"
-        pass
+        json_data = task_context.load(list)
+        tasks = JsonDataContext.parse_list(json_data, Task)
+
+        index = Task.get_index_by_id(tasks, arguments.id)
+        task: Task = tasks[index]
+
+        status: Task.Status = Task.Status.from_string(arguments.status)
+        assert status is not None
+
+        task.status = status.value
+        task.updated_at = time.time()
+
+        tasks[index] = task
+        task_context.save(tasks)
+
+        return True
 
     @staticmethod
     # Lists all tasks, and filters by optional status
@@ -207,11 +231,14 @@ class CommandHandler:
         self.handlers[command.name] = handler
         pass
 
-# make this safe .-.
     def handle(self, arguments, context):
-        command = arguments.command
-        handler = self.handlers[command]
-        return handler(arguments, context)
+        try:
+            command = arguments.command
+            handler = self.handlers[command]
+            return handler(arguments, context)
+        except AssertionError as ae:
+            print(f'{arguments.command} command failed with {vars(arguments)}')
+            return False
 
 
 def main():
@@ -244,7 +271,9 @@ def main():
 
     task_context = JsonDataContext('tasks.json')
     response = command_handler.handle(arguments, task_context)
-    print(response)
+
+    if response is not True:
+        command_builder.parser.print_help()
 
 
 main()
