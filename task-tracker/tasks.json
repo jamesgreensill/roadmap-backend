@@ -1,16 +1,9 @@
 [
     {
-        "id": 2,
-        "name": "test2",
-        "status": 1,
-        "created_at": 1756474192.4161437,
-        "updated_at": 1756474192.416144
-    },
-    {
         "id": 3,
         "name": "test2",
-        "status": 1,
+        "status": 2,
         "created_at": 1756474205.5619178,
-        "updated_at": 1756474205.561918
+        "updated_at": 1756475693.3751357
     }
 ]

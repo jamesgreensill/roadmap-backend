@@ -2,6 +2,7 @@ import argparse
 import os
 import json
 import time
+import datetime
 from enum import Enum
 from typing import List
 
@@ -50,7 +51,8 @@ class Task:
     # Slightly modified ENUM structure, to allow aliases using the __new__ method, technically non-standard but works nicely.
     class Status(Enum):
         TODO = (1, ["todo", "to do"])
-        IN_PROGRESS = (2, ["inprogress", "in progress", "in-progress"])
+        IN_PROGRESS = (2, ["inprogress", "in progress",
+                       "in-progress", 'in_progress'])
         DONE = (3, ["done"])
 
         def __new__(cls, value, aliases):
@@ -76,7 +78,17 @@ class Task:
         pass
 
     def __str__(self):
-        return f'id: {self.id}\nname: {self.name}\nstatus: {self.status}\ncreated_at: {self.created_at}\nupdated_at: {self.updated_at}'
+        status = Task.Status(int(self.status))
+        assert status is not None
+
+        output = f'Name: {self.name}'
+        output += f'\nID: {self.id}'
+        output += f'\nStatus: {status.name}'
+        output += f'\nCreated: {datetime.datetime.fromtimestamp(int(self.created_at))}'
+        output += f'\nUpdated: {datetime.datetime.fromtimestamp(int(self.updated_at))}'
+        output += f'\n'
+
+        return output
         pass
 
     def get_index_by_id(tasks, task_id):
@@ -98,7 +110,7 @@ class Task:
 
         # Auto increment, this prevents referenced ids from being overritten if deleted.
         # For example, if task w/ id:1 existed and was deleted, there will never be another task w/ id:1, this ensures
-        # Any references to task id:1 can error accordingly, and is not silent.
+        # Any references to task id:1 can error accordingly, and is not
         top_id = 0
         for task in tasks:
             task_id = int(task.id)
@@ -181,8 +193,19 @@ class Task:
     @staticmethod
     # Lists all tasks, and filters by optional status
     def list(arguments, task_context: JsonDataContext):
-        return 'list'
-        pass
+        json_data = task_context.load(list)
+        tasks = JsonDataContext.parse_list(json_data, Task)
+
+        status_filter = arguments.status
+        if status_filter is not None:
+            status = Task.Status.from_string(status_filter)
+            assert status is not None
+            tasks = filter(lambda task: int(task.status)
+                           == status.value, tasks)
+        for task in tasks:
+            print(task)
+
+        return True
 
 
 class Parameter:
