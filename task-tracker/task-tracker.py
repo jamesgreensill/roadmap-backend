@@ -127,6 +127,8 @@ class Task:
 
         tasks.append(task)
         task_context.save(tasks)
+
+        print(task)
         return True
 
     @staticmethod
@@ -149,6 +151,8 @@ class Task:
         tasks[index] = task
 
         task_context.save(tasks)
+
+        print(task)
         return True
 
     @staticmethod
@@ -187,7 +191,7 @@ class Task:
 
         tasks[index] = task
         task_context.save(tasks)
-
+        print(task)
         return True
 
     @staticmethod
