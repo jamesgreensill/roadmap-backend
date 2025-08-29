@@ -47,10 +47,25 @@ class JsonDataContext:
 
 
 class Task:
+    # Slightly modified ENUM structure, to allow aliases using the __new__ method, technically non-standard but works nicely.
     class Status(Enum):
-        TODO = 1
-        IN_PROGRESS = 2
-        DONE = 3
+        TODO = (1, ["todo", "to do"])
+        IN_PROGRESS = (2, ["inprogress", "in progress", "in-progress"])
+        DONE = (3, ["done"])
+
+        def __new__(cls, value, aliases):
+            obj = object.__new__(cls)
+            obj.value = value
+            obj.aliases = aliases
+            return obj
+
+        @classmethod
+        def from_string(cls, input):
+            input = input.lower()
+            for status in cls:
+                if input in status.aliases:
+                    return status
+            return None
 
     def __init__(self, id, name, status, created_at, updated_at):
         self.id = id
@@ -133,6 +148,9 @@ class Task:
     @staticmethod
     # Sets the status of an existing task
     def set_status(arguments, task_context: JsonDataContext):
+        assert arguments.id is not None
+        assert arguments.status is not None
+
         return "status"
         pass
 
