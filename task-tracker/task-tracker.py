@@ -107,6 +107,7 @@ class Task:
         task = tasks[index]
 
         task.name = arguments.name
+        task.updated_at = time.time()
 
         tasks[index] = task
 
