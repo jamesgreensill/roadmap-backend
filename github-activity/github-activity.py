@@ -159,12 +159,6 @@ class EventSummarizer:
 def main():
     URI_GH_EVENTS = 'https://api.github.com/users/{username}/events'
 
-    # I wonder how messy this will look
-    GH_EVENT_HANDLER = {
-        EventType.CommitCommentEvent: lambda data: print(data),
-        EventType.CreateEvent: lambda data: print(data),
-    }
-
     parser = argparse.ArgumentParser(
         prog='github-activity',
         description='A simple command line interface (CLI) to fetch the recent activity of a GitHub user'
