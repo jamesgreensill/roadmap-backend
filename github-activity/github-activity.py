@@ -139,20 +139,17 @@ class EventSummarizer:
         pass
 
     def summarize(self):
-        current_repository = None
-        current_event_type = None
-
+        current_event = None
         count = 0
         for event in self.events:
-            if count > 0 and (current_event_type != event.type or current_repository.id != event.repository.id):
+            if count > 0 and (current_event.type != event.type or current_event.repository.id != event.repository.id):
                 # We have encountered a new event type, display summary of previous event type
-                print(current_event_type.value.format(actor=event.actor.login,
-                      repo=current_repository.name, count=count, plural="s" if count > 1 else ""))
+                print(current_event.type.value.format(actor=event.actor.login,
+                      repo=current_event.repository.name, count=count, plural="s" if count > 1 else ""))
                 count = 0
 
             count += 1
-            current_repository = event.repository
-            current_event_type = event.type
+            current_event = event
         pass
 
 
