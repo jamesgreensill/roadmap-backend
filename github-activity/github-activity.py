@@ -94,6 +94,9 @@ class EventType(enum.Enum):
     SponsorshipEvent = "{actor} sponsored {count} repository{plural} in {repo}"
     WatchEvent = "{actor} started watching {count} repository{plural} in {repo}"
 
+    def build(self, actor, repo, count):
+        return self.value.format(actor=actor, repo=repo, count=count, plural="s" if count > 1 else "")
+
 
 class GitHubEvent(ApiObject):
     def __init__(self, id: int, type: EventType, actor: Actor, repository: Repository, created_at: str):
@@ -144,8 +147,7 @@ class EventSummarizer:
         for event in self.events:
             if count > 0 and (current_event.type != event.type or current_event.repository.id != event.repository.id):
                 # We have encountered a new event type, display summary of previous event type
-                print(current_event.type.value.format(actor=event.actor.login,
-                      repo=current_event.repository.name, count=count, plural="s" if count > 1 else ""))
+                print(current_event.type.build(current_event.actor.login, current_event.repository.name, count))
                 count = 0
 
             count += 1
