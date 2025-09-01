@@ -1,168 +1,70 @@
 import argparse
 import requests
-import enum
-import os
-import json
-
-# https://docs.github.com/en/rest/using-the-rest-api/github-event-types?apiVersion=2022-11-28
+import ghapi
+import apiloader
+import re
 
 
-class ApiLoader:
+class EventMessageBuilder:
+    _EVENT_MESSAGES = {
+        ghapi.EventType.CommitCommentEvent: ("made", "commit(s)"),
+        ghapi.EventType.CreateEvent: ("created", "item(s)"),
+        ghapi.EventType.DeleteEvent: ("deleted", "item(s)"),
+        ghapi.EventType.ForkEvent: ("forked", "repositor[y](ies)"),
+        ghapi.EventType.GollumEvent: ("updated", "wiki page(s)"),
+        ghapi.EventType.IssueCommentEvent: ("commented on", "issue(s)"),
+        ghapi.EventType.IssuesEvent: ("opened", "issue(s)"),
+        ghapi.EventType.MemberEvent: ("made", "member change(s)"),
+        ghapi.EventType.PublicEvent: ("made", "repositor[y](ies) public"),
+        ghapi.EventType.PullRequestEvent: ("opened", "pull request(s)"),
+        ghapi.EventType.PullRequestReviewEvent: ("reviewed", "pull request(s)"),
+        ghapi.EventType.PullRequestReviewCommentEvent: ("commented on", "pull request review(s)"),
+        ghapi.EventType.PullRequestReviewThreadEvent: ("updated", "pull request review thread(s)"),
+        ghapi.EventType.PushEvent: ("pushed", "commit(s)"),
+        ghapi.EventType.ReleaseEvent: ("published", "release(s)"),
+        ghapi.EventType.SponsorshipEvent: ("sponsored", "repositor[y](ies)"),
+        ghapi.EventType.WatchEvent: ("started watching", "repositor[y](ies)"),
+    }
+
+   # This will format the noun which contains both non-plural and plural definitons.
+   # i;e repositor[y](ies)
+   # Or cases, where the plural is appended to the word, rather than replaced.
+   # i;e commit(s)
+   # [text] = non-plural
+   # (text) = plural
     @staticmethod
-    def load(filepath: str):
-        try:
-            with open(filepath, 'r') as file:
-                data = json.load(file)
-        except (FileNotFoundError, json.JSONDecodeError):
-            return None, None
+    def _collapase_schrodinger_noun(noun: str, count: int):
+        noun = re.sub(
+            r'\[([^\]]+)\]\(([^\)]+)\)',
+            lambda m: m.group(2) if count > 1 else m.group(1),
+            noun
+        )
+        noun = re.sub(
+            r'([a-zA-Z]+)\(([^)]+)\)',
+            lambda m: m.group(1) + m.group(2) if count > 1 else m.group(1),
+            noun
+        )
+        return noun
 
-        hostname = data.get('hostname')
-        endpoints = data.get('endpoints')
+    @classmethod
+    def build(cls, event: ghapi.GitHubEvent, count: int):
+        event_type = event.type
+        repository = event.repository
+        actor = event.actor
 
-        if not hostname or not isinstance(endpoints, dict):
-            return None, None
+        if event_type not in cls._EVENT_MESSAGES:
+            return f'{actor.login} did something in {repository.name}'
 
-        return hostname, endpoints
+        verb, noun = cls._EVENT_MESSAGES[event_type]
+        collapsed_noun = cls._collapase_schrodinger_noun(noun, count)
 
-
-class ApiBuilder:
-    @staticmethod
-    def build_api(hostname: str, endpoints: dict):
-        api = type('API', (), {})()
-        for name, path in endpoints.items():
-            setattr(api, name, f"{hostname}{path}")
-        return api
-
-
-class ApiObject:
-    def __init__(self, id: int):
-        self.id = id
-        pass
+        return f'{actor.login} {verb} {count} {collapsed_noun} in {repository.name}'
 
 
-class Actor(ApiObject):
-    def __init__(self, id: int, login: str, display_login: str, url: str):
-        self.login = login
-        self.display_login = display_login
-        self.url = url
-        super().__init__(id)
-        pass
-
-    # expects dictionary to be structured:
-    # data = {
-    #   "id" : "<value>",
-    #   "login" : "<value>",
-    #   "display_login"  : "<value>",
-    #   "url" : "<value>"
-    # }
-    @staticmethod
-    def from_data(data: dict):
-        id = int(data.get('id'))
-        login = data.get('login')
-        display_login = data.get('display_login')
-        url = data.get('url')
-
-        assert id is not None
-        assert login is not None
-        assert display_login is not None
-        assert url is not None
-
-        return Actor(id, login, display_login, url)
-
-
-class Repository(ApiObject):
-    def __init__(self, id: int, name: str, url: str):
-        self.name = name
-        self.url = url
-
-        super().__init__(id)
-        pass
-
-    # expects dictionary to be structured:
-    # data = {
-    #   "id" : "<value>",
-    #   "name" : "<value>",
-    #   "url"  : "<value>"
-    # }
-
-    @staticmethod
-    def from_data(data: dict):
-        id = int(data.get('id'))
-        name = data.get('name')
-        url = data.get('url')
-
-        assert id is not None
-        assert name is not None
-        assert url is not None
-
-        return Repository(id, name, url)
-
-# This is the best way, I can think of having custom display messages,
-# without having 4 large data structures or loading externally
-
-# It can be formatted by:
-# EventType.Event.value.format(actor=actor.login, repo=repo.name, count=count, plural="s" if count > 1 else ""))
-
-
-class EventType(enum.Enum):
-    CommitCommentEvent = "{actor} made {count} commit comment{plural} in {repo}"
-    CreateEvent = "{actor} created {count} item{plural} in {repo}"
-    DeleteEvent = "{actor} deleted {count} item{plural} from {repo}"
-    ForkEvent = "{actor} forked {count} repository(ies) from {repo}"
-    GollumEvent = "{actor} updated {count} wiki page{plural} in {repo}"
-    IssueCommentEvent = "{actor} commented on {count} issue{plural} in {repo}"
-    IssuesEvent = "{actor} opened {count} issue{plural} in {repo}"
-    MemberEvent = "{actor} made {count} member change{plural} in {repo}"
-    PublicEvent = "{actor} made {count} repository(ies) public in {repo}"
-    PullRequestEvent = "{actor} opened {count} pull request{plural} in {repo}"
-    PullRequestReviewEvent = "{actor} reviewed {count} pull request{plural} in {repo}"
-    PullRequestReviewCommentEvent = "{actor} commented on {count} pull request review{plural} in {repo}"
-    PullRequestReviewThreadEvent = "{actor} updated {count} pull request review thread{plural} in {repo}"
-    PushEvent = "{actor} pushed {count} commit{plural} to {repo}"
-    ReleaseEvent = "{actor} published {count} release{plural} in {repo}"
-    SponsorshipEvent = "{actor} sponsored {count} repository(ies)} in {repo}"
-    WatchEvent = "{actor} started watching {count} repository(ies) in {repo}"
-
-    def build(self, actor, repo, count):
-        return self.value.format(actor=actor, repo=repo, count=count, plural="s" if count > 1 else "")
-
-
-class GitHubEvent(ApiObject):
-    def __init__(self, id: int, type: EventType, actor: Actor, repository: Repository, created_at: str):
-        self.id = id
-        self.type = type
-        self.actor = actor
-        self.repository = repository
-        self.created_at = created_at
-
-        super().__init__(id)
-
-    # expects dictionary to be structured:
-    # data = {
-    #   "id" : "<value>",
-    #   "type" : "<value>",
-    #   "actor"  : "{ ... }",
-    #   "repo : "{ ... }"
-    #   "created_at"  : "<value>",
-    # }
-    @staticmethod
-    def from_data(data):
-        id = int(data.get('id'))
-        type = data.get('type')
-        actor_data = data.get('actor')
-        repository_data = data.get('repo')
-        created_at = data.get('created_at')
-
-        assert id is not None
-        assert type is not None
-        assert actor_data is not None
-        assert repository_data is not None
-        assert created_at is not None
-
-        actor = Actor.from_data(actor_data)
-        repository = Repository.from_data(repository_data)
-
-        return GitHubEvent(id, EventType[type], actor, repository, created_at)
+class EventSummary:
+    def __init__(self, event, count):
+        self.event = event
+        self.count = count
 
 
 class EventSummarizer:
@@ -171,18 +73,18 @@ class EventSummarizer:
         pass
 
     def summarize(self):
+        summarized_events = []
         current_event = None
         count = 0
         for event in self.events:
             if count > 0 and (current_event.type != event.type or current_event.repository.id != event.repository.id):
                 # We have encountered a new event type, display summary of previous event type
-                print(current_event.type.build(current_event.actor.login,
-                      current_event.repository.name, count))
+                summarized_events.append(EventSummary(current_event, count))
                 count = 0
 
             count += 1
             current_event = event
-        pass
+        return summarized_events
 
 
 def main():
@@ -193,7 +95,7 @@ def main():
     parser.add_argument('username')
     arguments = parser.parse_args()
 
-    api = ApiBuilder.build_api(*ApiLoader.load('api.json'))
+    api = apiloader.Builder.build_api(*apiloader.Loader.load('api.json'))
 
     headers = {'User-Agent': "Github-Activity/1.0"}
     request_uri = api.user_events.format(
@@ -205,16 +107,20 @@ def main():
             f'Request failed: {request_uri} - {response.status_code} {response.reason}')
         return
 
-    json = response.json()
+    events_data = response.json()
 
     try:
-        events = [GitHubEvent.from_data(event) for event in json]
+        events = [ghapi.GitHubEvent.from_data(event) for event in events_data]
     except AssertionError as error:
-        print(f'Failed to parse response: {json}')
+        print(f'Failed to parse response: {events_data}')
         return
 
     summarizer = EventSummarizer(events)
-    summarizer.summarize()
+    summarized_events = summarizer.summarize()
+
+    for summary in summarized_events:
+        event_message = EventMessageBuilder.build(summary.event, summary.count)
+        print(event_message)
 
 
 main()
