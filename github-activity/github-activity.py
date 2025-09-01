@@ -186,23 +186,19 @@ class EventSummarizer:
 
 
 def main():
-    hostname, endpoints = ApiLoader.load('api.json')
-    api = ApiBuilder.build_api(hostname, endpoints)
-
     parser = argparse.ArgumentParser(
         prog='github-activity',
         description='A simple command line interface (CLI) to fetch the recent activity of a GitHub user'
     )
-
     parser.add_argument('username')
     arguments = parser.parse_args()
 
-    assert arguments.username is not None
+    api = ApiBuilder.build_api(*ApiLoader.load('api.json'))
 
     headers = {'User-Agent': "Github-Activity/1.0"}
     request_uri = api.user_events.format(
-        username=arguments.username, headers=headers)
-    response = requests.get(request_uri)
+        username=arguments.username)
+    response = requests.get(request_uri, headers=headers)
 
     if not response.ok:
         print(
