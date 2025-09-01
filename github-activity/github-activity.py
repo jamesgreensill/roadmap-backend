@@ -1,8 +1,37 @@
 import argparse
 import requests
 import enum
+import os
+import json
 
 # https://docs.github.com/en/rest/using-the-rest-api/github-event-types?apiVersion=2022-11-28
+
+
+class ApiLoader:
+    @staticmethod
+    def load(filepath: str):
+        try:
+            with open(filepath, 'r') as file:
+                data = json.load(file)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return None, None
+
+        hostname = data.get('hostname')
+        endpoints = data.get('endpoints')
+
+        if not hostname or not isinstance(endpoints, dict):
+            return None, None
+
+        return hostname, endpoints
+
+
+class ApiBuilder:
+    @staticmethod
+    def build_api(hostname: str, endpoints: dict):
+        api = type('API', (), {})()
+        for name, path in endpoints.items():
+            setattr(api, name, f"{hostname}{path}")
+        return api    
 
 
 class ApiObject:
@@ -147,7 +176,8 @@ class EventSummarizer:
         for event in self.events:
             if count > 0 and (current_event.type != event.type or current_event.repository.id != event.repository.id):
                 # We have encountered a new event type, display summary of previous event type
-                print(current_event.type.build(current_event.actor.login, current_event.repository.name, count))
+                print(current_event.type.build(current_event.actor.login,
+                      current_event.repository.name, count))
                 count = 0
 
             count += 1
@@ -156,7 +186,8 @@ class EventSummarizer:
 
 
 def main():
-    URI_GH_EVENTS = 'https://api.github.com/users/{username}/events'
+    hostname, endpoints = ApiLoader.load('api.json')
+    api = ApiBuilder.build_api(hostname, endpoints)
 
     parser = argparse.ArgumentParser(
         prog='github-activity',
@@ -168,8 +199,12 @@ def main():
 
     assert arguments.username is not None
 
-    request_uri = URI_GH_EVENTS.format(username=arguments.username)
+    request_uri = api.user_events.format(username=arguments.username)
     response = requests.get(request_uri)
+    
+    if not response.ok:
+        print(f'Request failed: {request_uri} - {response.status_code} {response.reason}')
+        return
 
     json = response.json()
 
@@ -181,6 +216,5 @@ def main():
 
     summarizer = EventSummarizer(events)
     summarizer.summarize()
-
-
+    
 main()
