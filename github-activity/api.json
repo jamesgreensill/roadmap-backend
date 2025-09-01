@@ -1,0 +1,6 @@
+{
+    "hostname": "https://api.github.com",
+    "endpoints": {
+        "user_events": "/users/{username}/events"
+    }
+}
