@@ -31,7 +31,7 @@ class ApiBuilder:
         api = type('API', (), {})()
         for name, path in endpoints.items():
             setattr(api, name, f"{hostname}{path}")
-        return api    
+        return api
 
 
 class ApiObject:
@@ -199,11 +199,14 @@ def main():
 
     assert arguments.username is not None
 
-    request_uri = api.user_events.format(username=arguments.username)
+    headers = {'User-Agent': "Github-Activity/1.0"}
+    request_uri = api.user_events.format(
+        username=arguments.username, headers=headers)
     response = requests.get(request_uri)
-    
+
     if not response.ok:
-        print(f'Request failed: {request_uri} - {response.status_code} {response.reason}')
+        print(
+            f'Request failed: {request_uri} - {response.status_code} {response.reason}')
         return
 
     json = response.json()
@@ -216,5 +219,6 @@ def main():
 
     summarizer = EventSummarizer(events)
     summarizer.summarize()
-    
+
+
 main()
