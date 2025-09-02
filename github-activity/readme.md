@@ -16,9 +16,11 @@ The application should run from the command line, accept the GitHub username as 
 - Display the fetched activity in the terminal.
   ```
   Output:
-  - Pushed 3 commits to kamranahmedse/developer-roadmap
-  - Opened a new issue in kamranahmedse/developer-roadmap
-  - Starred kamranahmedse/developer-roadmap
+  jamesgreensill pushed 4 commits in jamesgreensill/roadmap-backend
+  jamesgreensill opened 1 issue in jamesgreensill/roadmap-backend
+  jamesgreensill pushed 1 commit in jamesgreensill/roadmap-backend
+  jamesgreensill opened 2 issues in jamesgreensill/roadmap-backend
+  jamesgreensill pushed 3 commits in jamesgreensill/roadmap-backend
   - ...
   ```
   You can [learn more about the GitHub API here](https://docs.github.com/en/rest/activity/events?apiVersion=2022-11-28).
